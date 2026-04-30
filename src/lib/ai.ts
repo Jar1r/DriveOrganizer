@@ -27,6 +27,16 @@ export type AIRenameSuggestion = {
   confidence: number; // 0–1
 };
 
+export type AIUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export type AIRenameResponse = {
+  suggestions: AIRenameSuggestion[];
+  usage: AIUsage;
+};
+
 const SYSTEM_PROMPT = `You are a file-organization assistant. The user gives you a list of filenames (with sizes, modified dates, and optional text excerpts). For each file, output:
 - suggestedName: a clean, descriptive filename that a human would actually want. Title Case, spaces allowed, NO file extension (we add it back). Strip junk like "IMG_8472", "scan_001", "Untitled-3", random hex IDs. Infer the topic from filename semantics: dates, project names, document type, source app. If the filename is already good, return it unchanged.
 - category: one of the provided category keys. Choose the BEST semantic match, not just by extension. A "tax_2024_w2.pdf" is "documents" but a project README is "code". Prefer the most specific category.
@@ -44,11 +54,11 @@ export type BatchRenameInput = {
   signal?: AbortSignal;
 };
 
-export async function renameWithAI(input: BatchRenameInput): Promise<AIRenameSuggestion[]> {
+export async function renameWithAI(input: BatchRenameInput): Promise<AIRenameResponse> {
   const { settings, categories, files, signal } = input;
   const key = getActiveKey(settings);
   if (!key) throw new Error("No API key configured. Add one in Settings.");
-  if (files.length === 0) return [];
+  if (files.length === 0) return { suggestions: [], usage: { inputTokens: 0, outputTokens: 0 } };
 
   const categoryList = categories.map((c) => `${c.key} (${c.label}: ${c.extensions.slice(0, 6).join(", ")})`).join("\n");
   const userMessage = buildUserMessage(files, categoryList);
@@ -84,7 +94,7 @@ async function callAnthropic(
   model: string,
   userMessage: string,
   signal?: AbortSignal
-): Promise<AIRenameSuggestion[]> {
+): Promise<AIRenameResponse> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -105,9 +115,19 @@ async function callAnthropic(
     const errBody = await res.text().catch(() => "");
     throw new Error(`Anthropic ${res.status}: ${truncate(errBody, 200) || res.statusText}`);
   }
-  const json = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const json = (await res.json()) as {
+    content?: { type: string; text?: string }[];
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
   const text = (json.content ?? []).find((c) => c.type === "text")?.text ?? "";
-  return parseSuggestions(text);
+  const suggestions = parseSuggestions(text);
+  return {
+    suggestions,
+    usage: {
+      inputTokens: json.usage?.input_tokens ?? 0,
+      outputTokens: json.usage?.output_tokens ?? 0,
+    },
+  };
 }
 
 async function callOpenAI(
@@ -115,7 +135,7 @@ async function callOpenAI(
   model: string,
   userMessage: string,
   signal?: AbortSignal
-): Promise<AIRenameSuggestion[]> {
+): Promise<AIRenameResponse> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -138,9 +158,17 @@ async function callOpenAI(
   }
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
   const text = json.choices?.[0]?.message?.content ?? "";
-  return parseSuggestions(text);
+  const suggestions = parseSuggestions(text);
+  return {
+    suggestions,
+    usage: {
+      inputTokens: json.usage?.prompt_tokens ?? 0,
+      outputTokens: json.usage?.completion_tokens ?? 0,
+    },
+  };
 }
 
 function parseSuggestions(text: string): AIRenameSuggestion[] {

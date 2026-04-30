@@ -12,6 +12,11 @@ export type Settings = {
   anthropicModel: string;
   openaiModel: string;
   aiRenameEnabled: boolean;
+  // Daily soft-cap on AI spend (USD). When enabled, the app refuses AI calls
+  // that would push today's tally above this number. The user can reset the
+  // tally or raise the cap whenever they want.
+  dailyCapEnabled: boolean;
+  dailyCapUsd: number;
 };
 
 const KEY = "drive-organizer:settings:v1";
@@ -23,6 +28,8 @@ export const DEFAULT_SETTINGS: Settings = {
   anthropicModel: "claude-haiku-4-5-20251001",
   openaiModel: "gpt-4o-mini",
   aiRenameEnabled: false,
+  dailyCapEnabled: true,
+  dailyCapUsd: 0.5,
 };
 
 export function loadSettings(): Settings {

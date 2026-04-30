@@ -28,9 +28,16 @@ import {
   OTHER_CATEGORY,
   type Category,
 } from "@/lib/rules";
-import { hasApiKey, type Settings } from "@/lib/storage";
+import { hasApiKey, getActiveModel, type Settings } from "@/lib/storage";
 import { makeRecord, type UndoManager } from "@/lib/undo";
 import { maybeReadExcerpt, renameWithAI, type AIRenameSuggestion } from "@/lib/ai";
+import {
+  loadUsage,
+  addUsage,
+  estimateCost,
+  formatUsd,
+  type UsageRecord,
+} from "@/lib/usage";
 import { cn } from "@/lib/cn";
 
 type Phase = "scanning" | "ready" | "ai-suggesting" | "applying" | "done";
@@ -45,6 +52,9 @@ export default function SortView({
   setRecursive,
   settings,
   undoManager,
+  usage,
+  onUsageChange,
+  onOpenSettings,
   onUndoComplete,
 }: {
   root: FileSystemDirectoryHandle;
@@ -54,6 +64,9 @@ export default function SortView({
   setRecursive: (v: boolean) => void;
   settings: Settings;
   undoManager: UndoManager;
+  usage: UsageRecord;
+  onUsageChange: (next: UsageRecord) => void;
+  onOpenSettings: () => void;
   onUndoComplete?: () => void;
 }) {
   const [files, setFiles] = useState<ScannedFile[]>([]);
@@ -147,6 +160,22 @@ export default function SortView({
       setError("Add an API key in Settings to use AI rename.");
       return;
     }
+
+    // Enforce daily cap before spending a single token
+    const model = getActiveModel(settings);
+    const estimated = estimateCost(model, files.length);
+    if (settings.dailyCapEnabled) {
+      const remaining = Math.max(0, settings.dailyCapUsd - usage.spentUsd);
+      if (estimated > remaining) {
+        setError(
+          `This would cost about ${formatUsd(estimated)} but you only have ${formatUsd(
+            remaining
+          )} left in today's cap. Reset the cap in Settings, raise it, or pick a smaller folder.`
+        );
+        return;
+      }
+    }
+
     setError(null);
     setPhase("ai-suggesting");
     setProgress({ done: 0, total: files.length });
@@ -154,9 +183,24 @@ export default function SortView({
     // Cap to first N files per call to keep latency low
     const BATCH = 30;
     const all = new Map<string, AIRenameSuggestion>();
+    let runningUsage = usage;
+    let aborted = false;
 
     try {
       for (let i = 0; i < files.length; i += BATCH) {
+        // Re-check the cap before EACH batch — actual usage may differ from estimate
+        if (settings.dailyCapEnabled) {
+          const remaining = Math.max(0, settings.dailyCapUsd - runningUsage.spentUsd);
+          const nextEstimate = estimateCost(model, Math.min(BATCH, files.length - i));
+          if (nextEstimate > remaining) {
+            setError(
+              `Stopped at ${i} of ${files.length} files — daily cap reached. Reset or raise it in Settings to continue.`
+            );
+            aborted = true;
+            break;
+          }
+        }
+
         const slice = files.slice(i, i + BATCH);
         const requests = await Promise.all(
           slice.map(async (f) => {
@@ -170,13 +214,23 @@ export default function SortView({
             };
           })
         );
-        const suggestions = await renameWithAI({
+        const response = await renameWithAI({
           settings,
           categories,
           files: requests,
         });
-        // Index by filename → match back to ScannedFile by (filename, parent)
-        for (const sug of suggestions) {
+
+        // Tally actual spend reported by the provider
+        runningUsage = addUsage(
+          runningUsage,
+          model,
+          response.usage.inputTokens,
+          response.usage.outputTokens
+        );
+        onUsageChange(runningUsage);
+
+        // Index suggestions by filename
+        for (const sug of response.suggestions) {
           const match = slice.find((f) => f.name === sug.filename);
           if (match) all.set(match.relativePath, sug);
         }
@@ -185,11 +239,14 @@ export default function SortView({
       setAiSuggestions(all);
       setAiOverrides(all);
       setPhase("ready");
+      if (aborted && all.size === 0) {
+        // Nothing to keep
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI rename failed");
       setPhase("ready");
     }
-  }, [files, settings, categories]);
+  }, [files, settings, categories, usage, onUsageChange]);
 
   const handleClearAI = useCallback(() => {
     setAiSuggestions(new Map());
@@ -361,24 +418,18 @@ export default function SortView({
                 Clear AI
               </button>
             ) : (
-              <button
+              <AIButton
+                hasKey={hasApiKey(settings)}
+                phase={phase}
+                progress={progress}
+                fileCount={files.length}
+                model={getActiveModel(settings)}
+                usage={usage}
+                capEnabled={settings.dailyCapEnabled}
+                capUsd={settings.dailyCapUsd}
                 onClick={handleSuggestAI}
-                disabled={!hasApiKey(settings) || phase === "ai-suggesting" || files.length === 0}
-                className="inline-flex items-center gap-1.5 text-xs text-fuchsia-200 hover:text-fuchsia-100 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 rounded-lg border border-fuchsia-500/30 hover:bg-fuchsia-500/10 transition-colors duration-150 cursor-pointer"
-                title={!hasApiKey(settings) ? "Add an API key in Settings" : "AI rename + categorize"}
-              >
-                {phase === "ai-suggesting" ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    {progress.done}/{progress.total}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    AI rename
-                  </>
-                )}
-              </button>
+                onOpenSettings={onOpenSettings}
+              />
             )}
             <button
               onClick={handleApply}
@@ -659,6 +710,93 @@ function FailureSummary({ failures }: { failures: MoveError[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+function AIButton({
+  hasKey,
+  phase,
+  progress,
+  fileCount,
+  model,
+  usage,
+  capEnabled,
+  capUsd,
+  onClick,
+  onOpenSettings,
+}: {
+  hasKey: boolean;
+  phase: Phase;
+  progress: { done: number; total: number };
+  fileCount: number;
+  model: string;
+  usage: UsageRecord;
+  capEnabled: boolean;
+  capUsd: number;
+  onClick: () => void;
+  onOpenSettings: () => void;
+}) {
+  const remaining = capEnabled ? Math.max(0, capUsd - usage.spentUsd) : Infinity;
+  const estimated = estimateCost(model, fileCount || 1);
+  const wouldExceed = capEnabled && estimated > remaining;
+  const overLimit = capEnabled && remaining <= 0;
+
+  if (!hasKey) {
+    return (
+      <button
+        onClick={onOpenSettings}
+        className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 px-3 py-2 rounded-lg border border-white/10 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
+        title="Add an API key in Settings to enable AI rename"
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+        AI rename &middot; add key
+      </button>
+    );
+  }
+
+  if (overLimit || wouldExceed) {
+    return (
+      <button
+        onClick={onOpenSettings}
+        className="inline-flex flex-col items-start gap-0 text-left text-xs text-amber-200 hover:text-amber-100 px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 transition-colors duration-150 cursor-pointer"
+        title="Daily cap reached — open Settings to reset or raise"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5" />
+          {overLimit ? "Cap reached" : "Would exceed cap"}
+        </span>
+        <span className="text-[10px] text-amber-300/70 font-mono">
+          need ~{formatUsd(estimated)} · have {formatUsd(remaining)}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={phase === "ai-suggesting" || fileCount === 0}
+      className="inline-flex flex-col items-start gap-0 text-left text-xs text-fuchsia-200 hover:text-fuchsia-100 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg border border-fuchsia-500/30 hover:bg-fuchsia-500/10 transition-colors duration-150 cursor-pointer"
+      title={`AI rename + categorize (~${formatUsd(estimated)} for ${fileCount} files)`}
+    >
+      {phase === "ai-suggesting" ? (
+        <span className="inline-flex items-center gap-1.5">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          {progress.done}/{progress.total}
+        </span>
+      ) : (
+        <>
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            AI rename
+          </span>
+          <span className="text-[10px] text-fuchsia-300/60 font-mono">
+            ~{formatUsd(estimated)}
+            {capEnabled && ` · ${formatUsd(remaining)} left today`}
+          </span>
+        </>
+      )}
+    </button>
   );
 }
 

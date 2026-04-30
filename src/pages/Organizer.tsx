@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { isSupported, pickDirectory } from "@/lib/fs";
 import { loadSettings, saveSettings, type Settings } from "@/lib/storage";
+import { loadUsage, type UsageRecord } from "@/lib/usage";
 import { UndoManager } from "@/lib/undo";
 import { cn } from "@/lib/cn";
 import SortView from "@/components/SortView";
@@ -30,12 +31,15 @@ export default function Organizer() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("sort");
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [usage, setUsage] = useState<UsageRecord>(() => loadUsage());
   const undoManagerRef = useRef<UndoManager>(new UndoManager());
 
   const updateSettings = useCallback((next: Settings) => {
     setSettings(next);
     saveSettings(next);
   }, []);
+
+  const handleOpenSettings = useCallback(() => setTab("settings"), []);
 
   const handlePick = useCallback(async () => {
     setError(null);
@@ -131,6 +135,9 @@ export default function Organizer() {
             setRecursive={setRecursive}
             settings={settings}
             undoManager={undoManagerRef.current}
+            usage={usage}
+            onUsageChange={setUsage}
+            onOpenSettings={handleOpenSettings}
           />
         )}
 
@@ -144,7 +151,12 @@ export default function Organizer() {
         )}
 
         {root && tab === "settings" && (
-          <SettingsView settings={settings} onChange={updateSettings} />
+          <SettingsView
+            settings={settings}
+            onChange={updateSettings}
+            usage={usage}
+            onUsageReset={setUsage}
+          />
         )}
       </main>
     </div>
