@@ -6,6 +6,7 @@ import {
   Cog,
   Files,
   FolderOpen,
+  FolderSearch,
   Info,
   RotateCcw,
   Sparkles,
@@ -18,9 +19,10 @@ import { UndoManager } from "@/lib/undo";
 import { cn } from "@/lib/cn";
 import SortView from "@/components/SortView";
 import DuplicatesView from "@/components/DuplicatesView";
+import FoldersView from "@/components/FoldersView";
 import SettingsView from "@/components/SettingsView";
 
-type Tab = "sort" | "dupes" | "settings";
+type Tab = "sort" | "dupes" | "folders" | "settings";
 
 export default function Organizer() {
   const [supported] = useState(isSupported);
@@ -107,6 +109,10 @@ export default function Organizer() {
               <Files className="w-3.5 h-3.5" />
               Duplicates
             </TabButton>
+            <TabButton active={tab === "folders"} onClick={() => setTab("folders")}>
+              <FolderSearch className="w-3.5 h-3.5" />
+              Folders
+            </TabButton>
             <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
               <Cog className="w-3.5 h-3.5" />
               Settings
@@ -147,6 +153,17 @@ export default function Organizer() {
             root={root}
             recursive={recursive}
             setRecursive={setRecursive}
+          />
+        )}
+
+        {root && tab === "folders" && (
+          <FoldersView
+            key={`folders-${rootName}`}
+            root={root}
+            settings={settings}
+            usage={usage}
+            onUsageChange={setUsage}
+            onOpenSettings={handleOpenSettings}
           />
         )}
 

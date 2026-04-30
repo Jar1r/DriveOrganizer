@@ -196,6 +196,174 @@ function truncate(s: string, n: number): string {
   return s.slice(0, n) + "…";
 }
 
+// ============================================================================
+// Folder rename — different prompt because the AI is summarizing a folder's
+// contents into a name, not renaming a single file.
+// ============================================================================
+
+export type AIFolderRenameRequest = {
+  currentName: string;
+  parentPath: string;
+  fileCount: number;
+  subdirCount: number;
+  // Up to 30 sample entries for context
+  sampleEntries: { name: string; kind: "file" | "directory" }[];
+};
+
+export type AIFolderRenameSuggestion = {
+  currentName: string;
+  suggestedName: string;
+  reason: string;
+  confidence: number;
+};
+
+export type AIFolderRenameResponse = {
+  suggestions: AIFolderRenameSuggestion[];
+  usage: AIUsage;
+};
+
+const FOLDER_SYSTEM_PROMPT = `You are a file-organization assistant. The user gives you a list of folders that have generic default names (like "New folder", "untitled folder", "Untitled (3)") along with the contents of each folder. For each folder, output a clean, descriptive name based on what's actually inside.
+
+Rules for suggestedName:
+- 2–5 words, Title Case, spaces allowed.
+- NO special characters: no /, \\, :, *, ?, ", <, >, |.
+- Describe the THEME of the contents, not just one file. "Tax Documents 2024" not "1099-misc.pdf".
+- If files share a date or year, include it.
+- If the contents are random/mixed, fall back to a generic but still descriptive name like "Miscellaneous Photos" or "Old Downloads".
+- If you genuinely can't tell what's inside, return the original name with confidence < 0.4.
+
+Output strictly valid JSON, no markdown, no commentary outside the JSON.`;
+
+export async function renameFoldersWithAI(input: {
+  settings: Settings;
+  folders: AIFolderRenameRequest[];
+  signal?: AbortSignal;
+}): Promise<AIFolderRenameResponse> {
+  const { settings, folders, signal } = input;
+  const key = getActiveKey(settings);
+  if (!key) throw new Error("No API key configured. Add one in Settings.");
+  if (folders.length === 0) return { suggestions: [], usage: { inputTokens: 0, outputTokens: 0 } };
+
+  const folderBlock = folders
+    .map((f, i) => {
+      const sample = f.sampleEntries
+        .slice(0, 30)
+        .map((e) => (e.kind === "directory" ? `[DIR] ${e.name}` : e.name))
+        .join(", ");
+      const parent = f.parentPath ? ` (in ${f.parentPath})` : "";
+      return `${i + 1}. "${f.currentName}"${parent}\n  files: ${f.fileCount}, subfolders: ${f.subdirCount}\n  contents: ${sample || "(empty)"}`;
+    })
+    .join("\n\n");
+
+  const userMessage = `Folders to rename:
+
+${folderBlock}
+
+Return JSON: { "suggestions": [{ "currentName": "<original>", "suggestedName": "<new>", "reason": "<short>", "confidence": <0-1> }, ...] }`;
+
+  if (settings.aiProvider === "anthropic") {
+    return callAnthropicForFolders(key, getActiveModel(settings), userMessage, signal);
+  }
+  return callOpenAIForFolders(key, getActiveModel(settings), userMessage, signal);
+}
+
+async function callAnthropicForFolders(
+  key: string,
+  model: string,
+  userMessage: string,
+  signal?: AbortSignal
+): Promise<AIFolderRenameResponse> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      system: FOLDER_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Anthropic ${res.status}: ${truncate(errBody, 200) || res.statusText}`);
+  }
+  const json = (await res.json()) as {
+    content?: { type: string; text?: string }[];
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
+  const text = (json.content ?? []).find((c) => c.type === "text")?.text ?? "";
+  return {
+    suggestions: parseFolderSuggestions(text),
+    usage: {
+      inputTokens: json.usage?.input_tokens ?? 0,
+      outputTokens: json.usage?.output_tokens ?? 0,
+    },
+  };
+}
+
+async function callOpenAIForFolders(
+  key: string,
+  model: string,
+  userMessage: string,
+  signal?: AbortSignal
+): Promise<AIFolderRenameResponse> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: FOLDER_SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`OpenAI ${res.status}: ${truncate(errBody, 200) || res.statusText}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const text = json.choices?.[0]?.message?.content ?? "";
+  return {
+    suggestions: parseFolderSuggestions(text),
+    usage: {
+      inputTokens: json.usage?.prompt_tokens ?? 0,
+      outputTokens: json.usage?.completion_tokens ?? 0,
+    },
+  };
+}
+
+function parseFolderSuggestions(text: string): AIFolderRenameSuggestion[] {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Model returned non-JSON response");
+    parsed = JSON.parse(match[0]);
+  }
+  const obj = parsed as { suggestions?: unknown };
+  if (!Array.isArray(obj.suggestions)) throw new Error("Model response missing 'suggestions' array");
+  return (obj.suggestions as AIFolderRenameSuggestion[]).filter(
+    (s) => s && typeof s.currentName === "string" && typeof s.suggestedName === "string"
+  );
+}
+
 // Best-effort text extraction for files where we can read content.
 // Plain text + simple source code files. Skip binary files entirely; the model
 // gets filename-only context for those.
