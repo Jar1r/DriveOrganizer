@@ -322,11 +322,10 @@ export default function Landing() {
             <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
             <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
             <h2 className="relative text-3xl md:text-4xl font-semibold tracking-tight">
-              Reclaim your disk in 60 seconds.
+              Think you&rsquo;re in control?
             </h2>
             <p className="relative mt-4 text-gray-400 max-w-xl mx-auto">
-              Install once. AI renames, sorts, and finds the duplicates.
-              Undo if you don&rsquo;t like the result.
+              Your storage says otherwise. Let&rsquo;s fix that.
             </p>
             <div className="relative mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <button
