@@ -132,15 +132,15 @@ export default function Landing() {
   const SecondaryIcon = platform === "windows" ? Apple : Monitor;
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-gray-100 antialiased">
+    <div className="min-h-screen text-gray-100 antialiased">
       <BackgroundFX />
 
       {/* Nav */}
       <header className="relative z-20">
         <div className="mx-auto max-w-6xl px-6 py-5 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group cursor-pointer">
-            <img src="/logo.svg" alt="DriveOrganizer" className="w-8 h-8 transition-transform duration-200 group-hover:scale-105" />
-            <span className="font-semibold tracking-tight text-[15px]">DriveOrganizer</span>
+            <img src="/logo.svg" alt="DriveOrganizer" className="w-8 h-8 transition-transform duration-200 group-hover:scale-105 animate-neon-pulse" />
+            <span className="font-semibold tracking-tight text-[15px] cyber-bracket">DriveOrganizer</span>
           </Link>
           <nav className="flex items-center gap-1">
             <a
@@ -169,14 +169,14 @@ export default function Landing() {
       <section className="relative z-10">
         <div className="mx-auto max-w-6xl px-6 pt-12 pb-16 md:pt-20 md:pb-28">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-sm text-xs text-gray-400 mb-6 animate-fade-in">
-              <Zap className="w-3.5 h-3.5 text-sky-400" />
-              <span>Free during beta &middot; Mac &amp; Windows</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md border border-cyan-500/40 bg-cyan-500/[0.05] backdrop-blur-sm text-xs text-cyan-200 mb-6 animate-fade-in cyber-bracket shadow-glow-cyan-sm">
+              <Zap className="w-3.5 h-3.5 text-cyan-300" />
+              <span>v0.1 // free during beta // mac &amp; win</span>
             </div>
             <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-[1.04] animate-slide-up">
-              Reclaim
+              <span className="neon-cyan">Reclaim</span>
               <br />
-              <span className="bg-gradient-to-r from-fuchsia-300 via-sky-300 to-cyan-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-cyan-300 bg-clip-text text-transparent neon-magenta">
                 your disk.
               </span>
             </h1>
@@ -190,7 +190,7 @@ export default function Landing() {
               <button
                 onClick={handleInstall}
                 disabled={installed}
-                className="group inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-[#0b1220] font-semibold text-sm shadow-lg shadow-sky-500/20 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                className="neon-cyan-btn group inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 active:bg-cyan-500 text-[#070a1c] font-semibold text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
               >
                 {installed ? (
                   <>
@@ -208,7 +208,7 @@ export default function Landing() {
               <button
                 onClick={handleInstall}
                 disabled={installed}
-                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-gray-100 font-medium text-sm transition-all duration-200 disabled:opacity-60 cursor-pointer"
+                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] border border-cyan-500/30 hover:border-cyan-400/60 text-gray-100 font-medium text-sm transition-all duration-200 disabled:opacity-60 cursor-pointer"
               >
                 <SecondaryIcon className="w-4 h-4" />
                 {secondaryLabel}
@@ -234,17 +234,17 @@ export default function Landing() {
       </section>
 
       {/* Trust strip */}
-      <section className="relative z-10 border-y border-white/[0.06] bg-white/[0.015]">
-        <div className="mx-auto max-w-6xl px-6 py-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-xs text-gray-500">
+      <section className="relative z-10 border-y border-cyan-500/[0.12] bg-cyan-500/[0.02]">
+        <div className="mx-auto max-w-6xl px-6 py-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-xs text-gray-400">
           <span className="inline-flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5" /> 100% local. Files never leave your machine.
+            <Lock className="w-3.5 h-3.5 text-cyan-400" /> 100% local. Files never leave your machine.
           </span>
           <span className="inline-flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5" /> Sorts thousands of files per second
+            <Zap className="w-3.5 h-3.5 text-cyan-400" /> Sorts thousands of files per second
           </span>
           <span className="inline-flex items-center gap-2">
-            <Apple className="w-3.5 h-3.5" /> macOS &amp;
-            <Monitor className="w-3.5 h-3.5" /> Windows
+            <Apple className="w-3.5 h-3.5 text-cyan-400" /> macOS &amp;
+            <Monitor className="w-3.5 h-3.5 text-cyan-400" /> Windows
           </span>
         </div>
       </section>
@@ -265,14 +265,14 @@ export default function Landing() {
               return (
                 <div
                   key={i}
-                  className={`group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-6 transition-all duration-300 hover:border-white/15 hover:bg-white/[0.035] ${f.span}`}
+                  className={`group relative overflow-hidden rounded-2xl border border-cyan-500/[0.12] bg-cyan-500/[0.02] backdrop-blur-sm p-6 transition-all duration-300 hover:border-cyan-400/40 hover:bg-cyan-500/[0.04] hover:shadow-glow-cyan-sm ${f.span}`}
                 >
                   <div
                     className={`absolute inset-0 bg-gradient-to-br ${f.accent} opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`}
                   />
                   <div className="relative flex flex-col h-full">
-                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] mb-4">
-                      <Icon className="w-5 h-5 text-sky-400" />
+                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-500/[0.06] border border-cyan-500/30 mb-4 group-hover:border-cyan-400/60 transition-colors duration-300">
+                      <Icon className="w-5 h-5 text-cyan-300" />
                     </div>
                     <h3 className="text-lg font-medium tracking-tight text-gray-100">{f.title}</h3>
                     <p className="mt-2 text-sm text-gray-400 leading-relaxed">{f.body}</p>
@@ -306,7 +306,7 @@ export default function Landing() {
               },
             ].map((s) => (
               <div key={s.n} className="space-y-3">
-                <div className="text-xs font-mono text-sky-400 tracking-wider">{s.n}</div>
+                <div className="cyber-bracket text-xs text-cyan-400">// {s.n}</div>
                 <h3 className="text-xl font-medium tracking-tight">{s.title}</h3>
                 <p className="text-sm text-gray-400 leading-relaxed">{s.body}</p>
               </div>
@@ -318,9 +318,9 @@ export default function Landing() {
       {/* Final CTA */}
       <section className="relative z-10">
         <div className="mx-auto max-w-4xl px-6 py-20 md:py-28">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-sky-500/10 via-cyan-500/5 to-transparent p-10 md:p-14 text-center">
-            <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+          <div className="relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 via-fuchsia-500/[0.06] to-transparent p-10 md:p-14 text-center shadow-glow-cyan-sm">
+            <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none" />
             <h2 className="relative text-3xl md:text-4xl font-semibold tracking-tight">
               Think you&rsquo;re in control?
             </h2>
@@ -331,7 +331,7 @@ export default function Landing() {
               <button
                 onClick={handleInstall}
                 disabled={installed}
-                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-[#0b1220] font-semibold text-sm shadow-lg shadow-sky-500/20 transition-all duration-200 disabled:opacity-60 cursor-pointer"
+                className="neon-cyan-btn inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-[#070a1c] font-semibold text-sm transition-all duration-200 disabled:opacity-60 cursor-pointer"
               >
                 {installed ? (
                   <>
@@ -345,7 +345,7 @@ export default function Landing() {
               </button>
               <Link
                 to="/app"
-                className="inline-flex items-center justify-center gap-1.5 px-6 py-3.5 rounded-xl border border-white/10 hover:bg-white/[0.04] text-gray-100 text-sm transition-colors duration-200 cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 px-6 py-3.5 rounded-xl border border-cyan-500/30 hover:border-cyan-400/60 hover:bg-cyan-500/[0.05] text-gray-100 text-sm transition-colors duration-200 cursor-pointer"
               >
                 Try in browser first
               </Link>
@@ -394,16 +394,17 @@ export default function Landing() {
 function BackgroundFX() {
   return (
     <div aria-hidden className="absolute inset-x-0 top-0 h-[760px] overflow-hidden pointer-events-none">
-      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[1100px] rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(14,165,233,0.18),_rgba(14,165,233,0.05)_38%,_transparent_62%)]" />
-      <div className="absolute top-32 right-0 w-[480px] h-[480px] rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(34,211,238,0.12),_transparent_60%)]" />
+      <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[1100px] rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(34,211,238,0.22),_rgba(34,211,238,0.06)_38%,_transparent_62%)]" />
+      <div className="absolute top-20 -right-20 w-[520px] h-[520px] rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(232,121,249,0.16),_transparent_60%)]" />
+      <div className="absolute top-32 -left-24 w-[420px] h-[420px] rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(34,211,238,0.13),_transparent_60%)]" />
       <div
-        className="absolute inset-0 opacity-[0.03]"
+        className="absolute inset-0 opacity-[0.06]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
-          backgroundSize: "44px 44px",
-          maskImage: "radial-gradient(ellipse at center top, black 30%, transparent 70%)",
-          WebkitMaskImage: "radial-gradient(ellipse at center top, black 30%, transparent 70%)",
+            "linear-gradient(rgba(34,211,238,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.5) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+          maskImage: "radial-gradient(ellipse at center top, black 25%, transparent 70%)",
+          WebkitMaskImage: "radial-gradient(ellipse at center top, black 25%, transparent 70%)",
         }}
       />
     </div>
@@ -431,7 +432,7 @@ function DemoCard() {
     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 md:gap-6 items-stretch">
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-5">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs uppercase tracking-wider text-gray-500">Before</span>
+          <span className="cyber-bracket text-xs text-gray-500">[ before ]</span>
           <span className="text-xs text-gray-600">~/Downloads</span>
         </div>
         <ul className="space-y-1.5">
@@ -455,9 +456,9 @@ function DemoCard() {
           <ArrowRight className="w-5 h-5" />
         </div>
       </div>
-      <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.05] to-transparent backdrop-blur-sm p-5">
+      <div className="rounded-2xl border border-cyan-400/40 bg-gradient-to-br from-cyan-500/[0.08] to-transparent backdrop-blur-sm p-5 shadow-glow-cyan-sm">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs uppercase tracking-wider text-sky-400">After</span>
+          <span className="cyber-bracket text-xs text-cyan-300 neon-cyan">[ after ]</span>
           <span className="text-xs text-gray-600">~/Downloads</span>
         </div>
         <ul className="space-y-1.5">

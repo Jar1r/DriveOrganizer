@@ -136,7 +136,7 @@ export default function DuplicatesView({
         )}
         <button
           onClick={handleScan}
-          className="mt-8 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-fuchsia-500 hover:bg-fuchsia-400 text-[#0b1220] font-semibold text-sm shadow-lg shadow-fuchsia-500/20 transition-all duration-200 cursor-pointer"
+          className="neon-magenta-btn mt-8 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-fuchsia-500 hover:bg-fuchsia-400 text-[#070a1c] font-semibold text-sm transition-all duration-200 cursor-pointer"
         >
           <Play className="w-4 h-4" />
           Scan for duplicates
@@ -307,7 +307,7 @@ function DupeReportView({
         <button
           onClick={onDelete}
           disabled={phase === "deleting" || totalReclaimable === 0}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-semibold text-sm shadow-lg shadow-rose-500/20 transition-colors duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-semibold text-sm shadow-[0_0_18px_rgba(244,63,94,0.45)] hover:shadow-[0_0_28px_rgba(244,63,94,0.6)] transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {phase === "deleting" ? (
             <>

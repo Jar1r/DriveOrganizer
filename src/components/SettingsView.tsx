@@ -288,8 +288,8 @@ function ProviderButton({
       onClick={onClick}
       className={`px-4 py-3 rounded-xl border text-sm font-medium tracking-tight transition-all duration-200 cursor-pointer text-left ${
         active
-          ? "bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-100"
-          : "bg-white/[0.02] border-white/10 text-gray-300 hover:bg-white/[0.04]"
+          ? "bg-fuchsia-500/15 border-fuchsia-400/60 text-fuchsia-100 shadow-glow-magenta-sm"
+          : "bg-white/[0.02] border-white/10 text-gray-300 hover:bg-white/[0.04] hover:border-fuchsia-500/30"
       }`}
     >
       <div>{label}</div>

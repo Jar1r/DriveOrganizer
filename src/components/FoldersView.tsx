@@ -341,7 +341,7 @@ export default function FoldersView({
         )}
         <button
           onClick={handleScan}
-          className="mt-8 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#0b1220] font-semibold text-sm shadow-lg shadow-emerald-500/20 transition-all duration-200 cursor-pointer"
+          className="mt-8 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-[#070a1c] font-semibold text-sm shadow-[0_0_18px_rgba(163,230,53,0.45)] hover:shadow-[0_0_28px_rgba(163,230,53,0.6)] transition-all duration-200 cursor-pointer"
         >
           <Play className="w-4 h-4" />
           Scan for generic folders
@@ -501,7 +501,7 @@ export default function FoldersView({
           <button
             onClick={handleApply}
             disabled={isApplying || isAI || (counts.toDelete + counts.toRename === 0)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#0b1220] font-semibold text-sm shadow-lg shadow-emerald-500/20 transition-colors duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-lime-400 hover:bg-lime-300 text-[#070a1c] font-semibold text-sm shadow-[0_0_18px_rgba(163,230,53,0.45)] hover:shadow-[0_0_28px_rgba(163,230,53,0.6)] transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isApplying ? (
               <>

@@ -68,16 +68,16 @@ export default function Organizer() {
   if (!supported) return <UnsupportedScreen />;
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-gray-100">
-      <header className="border-b border-white/[0.06] sticky top-0 z-30 bg-[#0b1220]/85 backdrop-blur-md">
+    <div className="min-h-screen text-gray-100">
+      <header className="border-b border-cyan-500/[0.18] sticky top-0 z-30 bg-[#070a1c]/80 backdrop-blur-md">
         <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between gap-4">
           <Link
             to="/"
             className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-100 transition-colors duration-150 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <img src="/logo.svg" alt="" className="w-6 h-6" />
-            <span className="font-medium tracking-tight text-gray-100 hidden sm:inline">
+            <img src="/logo.svg" alt="" className="w-6 h-6 animate-neon-pulse" />
+            <span className="cyber-bracket text-gray-100 hidden sm:inline">
               DriveOrganizer
             </span>
           </Link>
@@ -195,10 +195,10 @@ function TabButton({
     <button
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 px-4 py-3 text-sm font-medium tracking-tight border-b-2 transition-colors duration-150 cursor-pointer",
+        "inline-flex items-center gap-1.5 px-4 py-3 text-xs cyber-bracket border-b-2 transition-all duration-200 cursor-pointer",
         active
-          ? "border-sky-400 text-gray-100"
-          : "border-transparent text-gray-500 hover:text-gray-200"
+          ? "border-cyan-400 text-cyan-200 [text-shadow:0_0_8px_rgba(34,211,238,0.45)]"
+          : "border-transparent text-gray-500 hover:text-gray-200 hover:border-cyan-500/30"
       )}
     >
       {children}
@@ -209,36 +209,38 @@ function TabButton({
 function PickFolderScreen({ onPick }: { onPick: () => void }) {
   return (
     <div className="text-center py-16">
-      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 mb-6">
-        <FolderOpen className="w-7 h-7 text-sky-400" />
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-400/40 mb-6 shadow-glow-cyan-sm">
+        <FolderOpen className="w-7 h-7 text-cyan-300" />
       </div>
-      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Pick a folder</h1>
+      <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+        <span className="neon-cyan">Pick a folder</span>
+      </h1>
       <p className="mt-3 text-sm text-gray-400 max-w-md mx-auto">
         DriveOrganizer reads what you pick and never uploads anything. Works on any drive &mdash;
         C:, D:, USB, network share.
       </p>
       <button
         onClick={onPick}
-        className="mt-8 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-[#0b1220] font-semibold text-sm shadow-lg shadow-sky-500/20 transition-all duration-200 cursor-pointer"
+        className="neon-cyan-btn mt-8 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-[#070a1c] font-semibold text-sm transition-all duration-200 cursor-pointer"
       >
         <FolderOpen className="w-4 h-4" />
         Pick folder
       </button>
 
       <div className="mt-12 max-w-xl mx-auto text-left">
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-gray-400 space-y-3">
+        <div className="rounded-xl border border-cyan-500/[0.15] bg-cyan-500/[0.02] p-4 text-xs text-gray-400 space-y-3">
           <div className="flex items-start gap-2">
-            <Info className="w-3.5 h-3.5 mt-0.5 flex-none text-sky-400" />
+            <Info className="w-3.5 h-3.5 mt-0.5 flex-none text-cyan-400" />
             <div>
-              <span className="text-gray-200 font-medium">Windows tip:</span> pick Documents,
+              <span className="text-cyan-200 font-medium cyber-bracket">[ win ]</span> pick Documents,
               Desktop, Downloads, or any folder you created. Windows blocks browser access to
               system folders (Program Files, Windows, AppData) by design.
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <Cloud className="w-3.5 h-3.5 mt-0.5 flex-none text-sky-400" />
+            <Cloud className="w-3.5 h-3.5 mt-0.5 flex-none text-fuchsia-400" />
             <div>
-              <span className="text-gray-200 font-medium">OneDrive tip:</span> online-only files
+              <span className="text-fuchsia-200 font-medium cyber-bracket">[ onedrive ]</span> online-only files
               download on read. Big folders may take a moment.
             </div>
           </div>
@@ -250,7 +252,7 @@ function PickFolderScreen({ onPick }: { onPick: () => void }) {
 
 function UnsupportedScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0b1220] p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-md text-center space-y-5">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20">
           <AlertTriangle className="w-6 h-6 text-amber-400" />

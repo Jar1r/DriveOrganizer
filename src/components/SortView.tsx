@@ -472,7 +472,7 @@ export default function SortView({
               disabled={isApplying || stats.total === 0}
               className={cn(
                 "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer",
-                "bg-sky-500 hover:bg-sky-400 text-[#0b1220] shadow-lg shadow-sky-500/20",
+                "neon-cyan-btn bg-cyan-400 hover:bg-cyan-300 text-[#070a1c]",
                 "disabled:opacity-60 disabled:cursor-not-allowed"
               )}
             >
