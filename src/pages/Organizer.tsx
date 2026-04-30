@@ -160,10 +160,12 @@ export default function Organizer() {
           <FoldersView
             key={`folders-${rootName}`}
             root={root}
+            rootName={rootName}
             settings={settings}
             usage={usage}
             onUsageChange={setUsage}
             onOpenSettings={handleOpenSettings}
+            undoManager={undoManagerRef.current}
           />
         )}
 

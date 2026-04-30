@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -9,6 +9,7 @@ import {
   Play,
   Sparkles,
   Undo2,
+  X,
 } from "lucide-react";
 import {
   ensureSubdirectory,
@@ -79,6 +80,7 @@ export default function SortView({
   const [aiSuggestions, setAiSuggestions] = useState<Map<string, AIRenameSuggestion>>(new Map());
   const [aiOverrides, setAiOverrides] = useState<Map<string, AIRenameSuggestion>>(new Map());
   const [undoVersion, setUndoVersion] = useState(0);
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return undoManager.subscribe(() => setUndoVersion((v) => v + 1));
@@ -180,14 +182,21 @@ export default function SortView({
     setPhase("ai-suggesting");
     setProgress({ done: 0, total: files.length });
 
+    aiAbortRef.current = new AbortController();
+    const signal = aiAbortRef.current.signal;
+
     // Cap to first N files per call to keep latency low
     const BATCH = 30;
     const all = new Map<string, AIRenameSuggestion>();
     let runningUsage = usage;
-    let aborted = false;
+    let abortedByUser = false;
 
     try {
       for (let i = 0; i < files.length; i += BATCH) {
+        if (signal.aborted) {
+          abortedByUser = true;
+          break;
+        }
         // Re-check the cap before EACH batch — actual usage may differ from estimate
         if (settings.dailyCapEnabled) {
           const remaining = Math.max(0, settings.dailyCapUsd - runningUsage.spentUsd);
@@ -196,7 +205,6 @@ export default function SortView({
             setError(
               `Stopped at ${i} of ${files.length} files — daily cap reached. Reset or raise it in Settings to continue.`
             );
-            aborted = true;
             break;
           }
         }
@@ -218,6 +226,7 @@ export default function SortView({
           settings,
           categories,
           files: requests,
+          signal,
         });
 
         // Tally actual spend reported by the provider
@@ -239,14 +248,26 @@ export default function SortView({
       setAiSuggestions(all);
       setAiOverrides(all);
       setPhase("ready");
-      if (aborted && all.size === 0) {
-        // Nothing to keep
+      if (abortedByUser && all.size > 0) {
+        setError(`Stopped at ${all.size} of ${files.length} files. Suggestions for the completed batches are kept.`);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "AI rename failed");
+      if ((e as Error)?.name === "AbortError") {
+        // User-initiated cancel; keep whatever suggestions arrived
+        setAiSuggestions(all);
+        setAiOverrides(all);
+      } else {
+        setError(e instanceof Error ? e.message : "AI rename failed");
+      }
       setPhase("ready");
+    } finally {
+      aiAbortRef.current = null;
     }
   }, [files, settings, categories, usage, onUsageChange]);
+
+  const handleCancelAI = useCallback(() => {
+    aiAbortRef.current?.abort();
+  }, []);
 
   const handleClearAI = useCallback(() => {
     setAiSuggestions(new Map());
@@ -324,7 +345,7 @@ export default function SortView({
   }, [plan, root, rootName, undoManager, aiOverrides]);
 
   const handleUndo = useCallback(async () => {
-    const op = undoManager.latest();
+    const op = undoManager.latestSort();
     if (!op) return;
     setError(null);
     setPhase("applying");
@@ -346,7 +367,7 @@ export default function SortView({
   const isApplying = phase === "applying" || phase === "ai-suggesting";
   const isDone = phase === "done";
   const isScanning = phase === "scanning";
-  const latestOp = undoManager.latest();
+  const latestOp = undoManager.latestSort();
   void undoVersion; // tracked to re-render on undo state change
 
   if (isScanning) {
@@ -410,7 +431,22 @@ export default function SortView({
             >
               Reset rules
             </button>
-            {aiSuggestions.size > 0 ? (
+            {phase === "ai-suggesting" ? (
+              <div className="inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 text-xs text-fuchsia-200">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  AI {progress.done}/{progress.total}
+                </span>
+                <button
+                  onClick={handleCancelAI}
+                  className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-100 px-2.5 py-2 rounded-lg border border-white/10 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
+                  title="Stop the AI batch and keep what's already finished"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancel
+                </button>
+              </div>
+            ) : aiSuggestions.size > 0 ? (
               <button
                 onClick={handleClearAI}
                 className="text-xs text-fuchsia-300 hover:text-fuchsia-200 px-3 py-2 rounded-lg border border-fuchsia-500/30 hover:bg-fuchsia-500/10 transition-colors duration-150 cursor-pointer"

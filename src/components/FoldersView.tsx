@@ -9,6 +9,8 @@ import {
   Sparkles,
   Trash2,
   Edit3,
+  X,
+  Undo2,
 } from "lucide-react";
 import { ensureWritePermission, formatBytes } from "@/lib/fs";
 import {
@@ -23,6 +25,7 @@ import {
 } from "@/lib/ai";
 import { hasApiKey, getActiveModel, type Settings } from "@/lib/storage";
 import { addUsage, estimateCost, formatUsd, type UsageRecord } from "@/lib/usage";
+import type { UndoManager } from "@/lib/undo";
 import { cn } from "@/lib/cn";
 
 type Phase = "idle" | "scanning" | "ready" | "ai" | "applying" | "done";
@@ -36,16 +39,20 @@ type Plan = {
 
 export default function FoldersView({
   root,
+  rootName,
   settings,
   usage,
   onUsageChange,
   onOpenSettings,
+  undoManager,
 }: {
   root: FileSystemDirectoryHandle;
+  rootName: string;
   settings: Settings;
   usage: UsageRecord;
   onUsageChange: (next: UsageRecord) => void;
   onOpenSettings: () => void;
+  undoManager: UndoManager;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [folders, setFolders] = useState<GenericFolder[]>([]);
@@ -59,7 +66,14 @@ export default function FoldersView({
     renamed: number;
     failed: { name: string; reason: string }[];
   } | null>(null);
+  const [undoVersion, setUndoVersion] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const aiAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return undoManager.subscribe(() => setUndoVersion((v) => v + 1));
+  }, [undoManager]);
+  void undoVersion;
 
   const planArray = useMemo(() => Array.from(plans.values()), [plans]);
   const counts = useMemo(() => {
@@ -147,10 +161,14 @@ export default function FoldersView({
     setPhase("ai");
     setAiProgress({ done: 0, total: renameTargets.length });
 
+    aiAbortRef.current = new AbortController();
+    const signal = aiAbortRef.current.signal;
+
     const BATCH = 10;
     let runningUsage = usage;
     try {
       for (let i = 0; i < renameTargets.length; i += BATCH) {
+        if (signal.aborted) break;
         if (settings.dailyCapEnabled) {
           const remaining = Math.max(0, settings.dailyCapUsd - runningUsage.spentUsd);
           const nextEstimate = estimateCost(model, Math.min(BATCH, renameTargets.length - i), 100);
@@ -170,6 +188,7 @@ export default function FoldersView({
             subdirCount: p.folder.subdirCount,
             sampleEntries: p.folder.sampleEntries,
           })),
+          signal,
         });
 
         runningUsage = addUsage(
@@ -191,10 +210,18 @@ export default function FoldersView({
       }
       setPhase("ready");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "AI rename failed");
+      if ((e as Error)?.name !== "AbortError") {
+        setError(e instanceof Error ? e.message : "AI rename failed");
+      }
       setPhase("ready");
+    } finally {
+      aiAbortRef.current = null;
     }
   }, [planArray, settings, usage, onUsageChange, updatePlan]);
+
+  const handleCancelAI = useCallback(() => {
+    aiAbortRef.current?.abort();
+  }, []);
 
   const handleApply = useCallback(async () => {
     setError(null);
@@ -215,11 +242,26 @@ export default function FoldersView({
     let renamed = 0;
     const failed: { name: string; reason: string }[] = [];
 
+    const recorder = undoManager.beginFolder(rootName);
+
     for (const plan of work) {
       try {
         if (plan.action === "delete") {
+          // Only the empty deletes are reversible (we recreate the empty
+          // directory). Non-empty deletes wouldn't be — and currently we
+          // only default-delete empty folders. If a user deliberately
+          // changes a non-empty folder's action to delete, we still skip
+          // recording the undo since recreating contents isn't possible.
           await deleteFolder(plan.folder.parent, plan.folder.name);
           deleted++;
+          if (plan.folder.isEmpty) {
+            recorder.recordDelete({
+              parent: plan.folder.parent,
+              parentPath: plan.folder.parentPath,
+              name: plan.folder.name,
+              wasEmpty: true,
+            });
+          }
         } else if (plan.action === "rename") {
           if (plan.newName.trim() === "" || plan.newName === plan.folder.name) {
             // No-op rename — skip silently
@@ -229,8 +271,17 @@ export default function FoldersView({
               plan.folder.name,
               plan.newName.trim()
             );
-            if (result.ok) renamed++;
-            else failed.push({ name: plan.folder.name, reason: result.error });
+            if (result.ok) {
+              renamed++;
+              recorder.recordRename({
+                parent: plan.folder.parent,
+                parentPath: plan.folder.parentPath,
+                oldName: plan.folder.name,
+                finalName: result.finalName,
+              });
+            } else {
+              failed.push({ name: plan.folder.name, reason: result.error });
+            }
           }
         }
       } catch (err) {
@@ -242,9 +293,30 @@ export default function FoldersView({
       setApplyProgress((p) => ({ done: p.done + 1, total: p.total }));
     }
 
+    recorder.commit();
     setResults({ deleted, renamed, failed });
     setPhase("done");
-  }, [root, planArray]);
+  }, [root, rootName, planArray, undoManager]);
+
+  const handleUndo = useCallback(async () => {
+    const op = undoManager.latestFolder();
+    if (!op) return;
+    setError(null);
+    setPhase("applying");
+    setApplyProgress({ done: 0, total: op.renames.length + op.deletes.length });
+    const result = await undoManager.undo(op);
+    setPhase("done");
+    if (result.failed.length > 0) {
+      setError(
+        `Reversed ${result.reversed} of ${op.renames.length + op.deletes.length} operations. ${result.failed.length} couldn't be undone.`
+      );
+    }
+    // Clear local results so the user can rescan from a clean state
+    setResults(null);
+    setFolders([]);
+    setPlans(new Map());
+    setPhase("idle");
+  }, [undoManager]);
 
   useEffect(() => {
     return () => abortRef.current?.abort();
@@ -297,6 +369,7 @@ export default function FoldersView({
   }
 
   if (phase === "done" && results) {
+    const latestFolderOp = undoManager.latestFolder();
     return (
       <div className="py-16 text-center space-y-5 max-w-md mx-auto">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
@@ -323,12 +396,23 @@ export default function FoldersView({
             </ul>
           </details>
         )}
-        <button
-          onClick={handleScan}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/[0.04] text-gray-100 text-sm transition-colors duration-200 cursor-pointer"
-        >
-          Scan again
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+          {latestFolderOp && (
+            <button
+              onClick={handleUndo}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 text-sm font-medium transition-colors duration-200 cursor-pointer"
+            >
+              <Undo2 className="w-4 h-4" />
+              Undo last
+            </button>
+          )}
+          <button
+            onClick={handleScan}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/[0.04] text-gray-100 text-sm transition-colors duration-200 cursor-pointer"
+          >
+            Scan again
+          </button>
+        </div>
       </div>
     );
   }
@@ -381,7 +465,21 @@ export default function FoldersView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {aiCount === renameTargets.length && renameTargets.length > 0 ? (
+          {isAI ? (
+            <div className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 text-xs text-fuchsia-200">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                AI {aiProgress.done}/{aiProgress.total}
+              </span>
+              <button
+                onClick={handleCancelAI}
+                className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-100 px-2.5 py-2 rounded-lg border border-white/10 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancel
+              </button>
+            </div>
+          ) : aiCount === renameTargets.length && renameTargets.length > 0 ? (
             <span className="text-xs text-fuchsia-300 inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/5">
               <Sparkles className="w-3.5 h-3.5" />
               AI named all

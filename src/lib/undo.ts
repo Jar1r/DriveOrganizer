@@ -1,5 +1,5 @@
-// In-session undo log for sort operations.
-// Tracks every successful move so the user can reverse a whole sort with one click.
+// In-session undo log for sort + folder operations.
+// Tracks every successful move/rename/delete so the user can reverse it.
 //
 // Scope: this session only. We don't persist the FileSystemDirectoryHandle to
 // IndexedDB yet — page refresh wipes the undo history. That's a deliberate
@@ -7,6 +7,7 @@
 // handling. Easy to add later.
 
 import type { ScannedFile } from "./fs";
+import { renameFolder } from "./folders";
 
 export type MoveRecord = {
   // The file's name at its destination (may differ from originalName if there was a collision)
@@ -25,13 +26,41 @@ export type SortOperation = {
   moves: MoveRecord[];
 };
 
+export type FolderRenameRecord = {
+  parent: FileSystemDirectoryHandle;
+  parentPath: string;
+  oldName: string;
+  // Final name we wrote (may have a "(2)" suffix if there was a collision)
+  finalName: string;
+};
+
+export type FolderDeleteRecord = {
+  parent: FileSystemDirectoryHandle;
+  parentPath: string;
+  name: string;
+  // We only allow undo for deletes that WERE empty when removed. Restoring
+  // contents from a recursive delete isn't possible here.
+  wasEmpty: true;
+};
+
+export type FolderOperation = {
+  kind: "folder";
+  id: string;
+  timestamp: number;
+  rootName: string;
+  renames: FolderRenameRecord[];
+  deletes: FolderDeleteRecord[];
+};
+
+export type Operation = (SortOperation & { kind?: "sort" }) | FolderOperation;
+
 export type UndoResult = {
   reversed: number;
-  failed: { record: MoveRecord; reason: string }[];
+  failed: { reason: string; label: string }[];
 };
 
 export class UndoManager {
-  private log: SortOperation[] = [];
+  private log: Operation[] = [];
   private listeners = new Set<() => void>();
 
   begin(rootName: string): MoveRecorder {
@@ -52,24 +81,65 @@ export class UndoManager {
     };
   }
 
-  latest(): SortOperation | null {
+  beginFolder(rootName: string): FolderRecorder {
+    const op: FolderOperation = {
+      kind: "folder",
+      id: cryptoRandomId(),
+      timestamp: Date.now(),
+      rootName,
+      renames: [],
+      deletes: [],
+    };
+    return {
+      recordRename: (record) => op.renames.push(record),
+      recordDelete: (record) => op.deletes.push(record),
+      commit: () => {
+        if (op.renames.length > 0 || op.deletes.length > 0) {
+          this.log.push(op);
+          this.notify();
+        }
+      },
+    };
+  }
+
+  latest(): Operation | null {
     return this.log[this.log.length - 1] ?? null;
+  }
+
+  latestSort(): SortOperation | null {
+    for (let i = this.log.length - 1; i >= 0; i--) {
+      const op = this.log[i];
+      if (!isFolderOp(op)) return op;
+    }
+    return null;
+  }
+
+  latestFolder(): FolderOperation | null {
+    for (let i = this.log.length - 1; i >= 0; i--) {
+      const op = this.log[i];
+      if (isFolderOp(op)) return op;
+    }
+    return null;
   }
 
   count(): number {
     return this.log.length;
   }
 
-  async undo(operation: SortOperation): Promise<UndoResult> {
+  async undo(operation: Operation): Promise<UndoResult> {
+    if (isFolderOp(operation)) {
+      return this.undoFolder(operation);
+    }
+    return this.undoSort(operation);
+  }
+
+  private async undoSort(operation: SortOperation): Promise<UndoResult> {
     const failed: UndoResult["failed"] = [];
     let reversed = 0;
-    // Reverse in opposite order so any name-collision logic during apply
-    // unwinds cleanly.
     for (const move of [...operation.moves].reverse()) {
       try {
         const destFile = await move.destDir.getFileHandle(move.destName);
         const blob = await destFile.getFile();
-        // Restore original name into original parent
         const restored = await uniqueName(move.originalParent, move.originalName);
         const restoredHandle = await move.originalParent.getFileHandle(restored, { create: true });
         const writable = await restoredHandle.createWritable();
@@ -78,10 +148,42 @@ export class UndoManager {
         reversed++;
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown error";
-        failed.push({ record: move, reason: message });
+        failed.push({ reason: message, label: move.originalName });
       }
     }
-    // Remove the undone operation from the log
+    this.log = this.log.filter((o) => o.id !== operation.id);
+    this.notify();
+    return { reversed, failed };
+  }
+
+  private async undoFolder(operation: FolderOperation): Promise<UndoResult> {
+    const failed: UndoResult["failed"] = [];
+    let reversed = 0;
+    // Reverse renames first (they can fail noisily) then re-create deletes.
+    for (const r of [...operation.renames].reverse()) {
+      try {
+        const result = await renameFolder(r.parent, r.finalName, r.oldName);
+        if (result.ok) reversed++;
+        else failed.push({ reason: result.error, label: `rename ${r.finalName} → ${r.oldName}` });
+      } catch (err) {
+        failed.push({
+          reason: err instanceof Error ? err.message : "unknown",
+          label: `rename ${r.finalName} → ${r.oldName}`,
+        });
+      }
+    }
+    for (const d of [...operation.deletes].reverse()) {
+      try {
+        // Recreating an empty folder is trivial — just create the directory.
+        await d.parent.getDirectoryHandle(d.name, { create: true });
+        reversed++;
+      } catch (err) {
+        failed.push({
+          reason: err instanceof Error ? err.message : "unknown",
+          label: `recreate ${d.name}`,
+        });
+      }
+    }
     this.log = this.log.filter((o) => o.id !== operation.id);
     this.notify();
     return { reversed, failed };
@@ -102,8 +204,18 @@ export class UndoManager {
   }
 }
 
+function isFolderOp(op: Operation): op is FolderOperation {
+  return (op as FolderOperation).kind === "folder";
+}
+
 export type MoveRecorder = {
   record: (move: MoveRecord) => void;
+  commit: () => void;
+};
+
+export type FolderRecorder = {
+  recordRename: (record: FolderRenameRecord) => void;
+  recordDelete: (record: FolderDeleteRecord) => void;
   commit: () => void;
 };
 
