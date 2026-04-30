@@ -1,0 +1,16 @@
+{
+  "name": "DriveOrganizer",
+  "short_name": "DriveOrg",
+  "description": "Local file organizer with AI-powered sort suggestions. Pick a folder, click sort, done.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B1220",
+  "theme_color": "#0EA5E9",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
