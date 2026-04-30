@@ -1,9 +1,27 @@
 # DriveOrganizer
 
-Local-first file organizer. Pick any folder on your Mac or Windows machine, and DriveOrganizer
-sorts the contents into clean, categorized subfolders. Files never leave your machine.
+Local-first AI disk cleaner. Pick any folder on your Mac or Windows machine — AI renames the
+ugly filenames, sorts everything by meaning, and finds the duplicates eating your storage.
+One-click undo if you don't like the result. Files never leave your machine.
 
 Installs as a desktop app via your browser (Chrome/Edge/Brave/Arc on Mac & Windows). No App Store, no installer file.
+
+## What it does
+
+**Sort** — categorizes every file in a folder, optionally with AI-generated names. Built-in
+rules cover images, video, audio, docs, code, archives, fonts, installers, shortcuts; rules
+are editable per-category and persist locally.
+
+**AI rename + categorize** — bring your own Anthropic or OpenAI key. AI reads filenames
+(plus a 240-char excerpt for small text/code files), suggests a clean human-readable name,
+and picks the best semantic category. You preview every rename before anything moves.
+
+**Find duplicates** — two-stage hashing (size+head+tail fast hash → full SHA-256 only on
+candidates) finds exact duplicates without melting your RAM. Pick which copy to keep,
+reclaim space.
+
+**Undo** — every move is logged in-session. One click reverses every file to its original
+location with its original name.
 
 ## Stack
 

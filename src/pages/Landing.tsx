@@ -17,6 +17,9 @@ import {
   Monitor,
   X,
   Sparkles,
+  Files,
+  Undo2,
+  Gauge,
 } from "lucide-react";
 
 type BeforeInstallPromptEvent = Event & {
@@ -44,38 +47,38 @@ function detectBrowser(): "chrome" | "edge" | "safari" | "firefox" | "other" {
 
 const FEATURES = [
   {
-    icon: FolderTree,
-    title: "One folder, infinite order",
-    body: "Point DriveOrganizer at any messy Downloads or Desktop folder. Get a clean, categorized layout in seconds.",
-    accent: "from-sky-500/20 to-cyan-500/0",
+    icon: Sparkles,
+    title: "AI rename + categorize",
+    body: "Drop ugly filenames like IMG_8472.HEIC. AI reads context, renames them to something you'd recognize, and files them by meaning — not just extension.",
+    accent: "from-fuchsia-500/20 to-pink-500/0",
     span: "md:col-span-2 md:row-span-2",
   },
   {
-    icon: Wand2,
-    title: "Smart auto-sort",
-    body: "Built-in rules for images, docs, code, video, archives — extend with your own.",
-    accent: "from-blue-500/20 to-blue-500/0",
+    icon: Files,
+    title: "Find duplicate files",
+    body: "Two-stage hashing finds exact dupes fast. See reclaimable space. One click to delete extras.",
+    accent: "from-cyan-500/20 to-cyan-500/0",
+    span: "",
+  },
+  {
+    icon: Undo2,
+    title: "One-click undo",
+    body: "Don't like the result? Reverse the entire sort instantly. Your files come back exactly where they were.",
+    accent: "from-amber-500/20 to-amber-500/0",
     span: "",
   },
   {
     icon: Lock,
     title: "Stays on your machine",
-    body: "Files never leave your computer. No upload, no cloud, no account required.",
+    body: "Files never leave your computer. No upload, no account, no telemetry.",
     accent: "from-emerald-500/20 to-emerald-500/0",
     span: "",
   },
   {
-    icon: Zap,
-    title: "Instant",
-    body: "Categorizes thousands of files in under a second. Move with one click.",
-    accent: "from-amber-500/20 to-amber-500/0",
-    span: "",
-  },
-  {
-    icon: Sparkles,
-    title: "Custom rules",
-    body: "Save your own categories — \"Tax 2025\", \"Client A\", whatever — and reuse them.",
-    accent: "from-fuchsia-500/15 to-fuchsia-500/0",
+    icon: Gauge,
+    title: "Built for huge folders",
+    body: "Streams multi-GB files. Hashes 10K-file folders without melting your RAM.",
+    accent: "from-sky-500/20 to-sky-500/0",
     span: "",
   },
 ];
@@ -171,15 +174,16 @@ export default function Landing() {
               <span>Free during beta &middot; Mac &amp; Windows</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.04] animate-slide-up">
-              Your folders,
+              AI cleans your disk,
               <br />
-              <span className="bg-gradient-to-r from-sky-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
-                sorted in one click.
+              <span className="bg-gradient-to-r from-fuchsia-300 via-sky-300 to-cyan-300 bg-clip-text text-transparent">
+                tells you how much space you got back.
               </span>
             </h1>
             <p className="mt-6 text-base md:text-lg text-gray-400 max-w-2xl leading-relaxed">
-              DriveOrganizer cleans up the messy folders on your Mac or Windows
-              machine. Pick a folder. Click sort. Watch it land where it belongs.
+              Pick a folder. AI renames the messy files, sorts them by meaning, and finds the
+              duplicates eating your storage. Don&rsquo;t like the result? One-click undo puts
+              everything back exactly where it was.
             </p>
 
             <div id="install" className="mt-10 flex flex-col sm:flex-row gap-3">
@@ -250,9 +254,9 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
           <div className="max-w-2xl">
             <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-              Built for messy folders.
+              Smarter than a folder rule.
               <br />
-              <span className="text-gray-400">Privacy-first, instant, yours.</span>
+              <span className="text-gray-400">Safer than a rm -rf.</span>
             </h2>
           </div>
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 md:auto-rows-[200px] gap-4">
@@ -287,18 +291,18 @@ export default function Landing() {
             {[
               {
                 n: "01",
-                title: "Pick a folder",
-                body: "Click \"Pick folder\" and grant DriveOrganizer access to the directory you want to clean.",
+                title: "Pick + AI scan",
+                body: "Choose any folder. AI reads filenames + small text excerpts, suggests clean names and the right category for each file.",
               },
               {
                 n: "02",
-                title: "Preview the plan",
-                body: "See exactly which files will move where. Edit categories before anything happens.",
+                title: "Find the waste",
+                body: "Switch to Duplicates. Two-stage hashing finds exact copies. See how much space you can reclaim before deleting anything.",
               },
               {
                 n: "03",
-                title: "Apply",
-                body: "One click sorts everything into clean subfolders. Files stay on your machine.",
+                title: "Apply, then undo if you want",
+                body: "Click apply. If the result isn't right, one click reverses every move. Your files come back exactly where they were.",
               },
             ].map((s) => (
               <div key={s.n} className="space-y-3">
@@ -318,10 +322,11 @@ export default function Landing() {
             <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
             <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
             <h2 className="relative text-3xl md:text-4xl font-semibold tracking-tight">
-              Stop scrolling through Downloads.
+              Reclaim your disk in 60 seconds.
             </h2>
             <p className="relative mt-4 text-gray-400 max-w-xl mx-auto">
-              Install DriveOrganizer once, and clean up any folder in seconds.
+              Install once. AI renames, sorts, and finds the duplicates.
+              Undo if you don&rsquo;t like the result.
             </p>
             <div className="relative mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <button

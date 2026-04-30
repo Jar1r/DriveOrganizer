@@ -32,7 +32,9 @@ export type MoveError = {
   message: string;
 };
 
-export type MoveResult = { ok: true } | { ok: false; error: MoveError };
+export type MoveResult =
+  | { ok: true; destName: string }
+  | { ok: false; error: MoveError };
 
 export type FileSystemHandlePermissionDescriptor = {
   mode?: "read" | "readwrite";
@@ -181,7 +183,65 @@ export async function moveFile(
     return { ok: false, error: classifyError(file, err, "remove") };
   }
 
-  return { ok: true };
+  return { ok: true, destName };
+}
+
+// Move with an optional override name (used by AI rename — we want to write
+// the file under a new, AI-suggested name instead of preserving file.name).
+export async function moveFileAs(
+  file: ScannedFile,
+  destDir: FileSystemDirectoryHandle,
+  desiredName: string
+): Promise<MoveResult> {
+  // Sanitize the AI-proposed name and preserve the original extension if the
+  // model dropped it
+  const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : "";
+  const cleaned = desiredName.replace(/[\\/:*?"<>|]/g, "-").trim() || file.name;
+  const finalName = cleaned.toLowerCase().endsWith(ext.toLowerCase())
+    ? cleaned
+    : ext
+    ? cleaned + ext
+    : cleaned;
+
+  // Build a virtual ScannedFile with the desired name so the rest of the move
+  // pipeline doesn't need a different code path
+  const virtual: ScannedFile = { ...file, name: file.name }; // keep original name for source read
+  // We can't reuse moveFile directly because uniqueName uses file.name. Inline:
+  let source: File;
+  try {
+    source = await virtual.handle.getFile();
+  } catch (err) {
+    return { ok: false, error: classifyError(virtual, err, "read") };
+  }
+  let destName: string;
+  try {
+    destName = await uniqueName(destDir, finalName);
+  } catch (err) {
+    return { ok: false, error: classifyError(virtual, err, "name") };
+  }
+  let destHandle: FileSystemFileHandle;
+  try {
+    destHandle = await destDir.getFileHandle(destName, { create: true });
+  } catch (err) {
+    return { ok: false, error: classifyError(virtual, err, "create") };
+  }
+  try {
+    const writable = await destHandle.createWritable();
+    await source.stream().pipeTo(writable);
+  } catch (err) {
+    try {
+      await destDir.removeEntry(destName);
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: classifyError(virtual, err, "write") };
+  }
+  try {
+    await virtual.parent.removeEntry(virtual.name);
+  } catch (err) {
+    return { ok: false, error: classifyError(virtual, err, "remove") };
+  }
+  return { ok: true, destName };
 }
 
 function classifyError(file: ScannedFile, err: unknown, phase: string): MoveError {
