@@ -173,11 +173,11 @@ export default function Landing() {
               <Zap className="w-3.5 h-3.5 text-sky-400" />
               <span>Free during beta &middot; Mac &amp; Windows</span>
             </div>
-            <h1 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.04] animate-slide-up">
-              AI cleans your disk,
+            <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-[1.04] animate-slide-up">
+              Reclaim
               <br />
               <span className="bg-gradient-to-r from-fuchsia-300 via-sky-300 to-cyan-300 bg-clip-text text-transparent">
-                tells you how much space you got back.
+                your disk.
               </span>
             </h1>
             <p className="mt-6 text-base md:text-lg text-gray-400 max-w-2xl leading-relaxed">
