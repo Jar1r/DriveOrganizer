@@ -10,15 +10,19 @@ import {
   Sparkles,
   Check,
   ChevronRight,
+  Info,
+  Cloud,
 } from "lucide-react";
 import {
   isSupported,
   pickDirectory,
   scanDirectory,
   ensureSubdirectory,
+  ensureWritePermission,
   moveFile,
   formatBytes,
   type ScannedFile,
+  type MoveError,
 } from "@/lib/fs";
 import {
   loadCategories,
@@ -37,6 +41,7 @@ type Plan = Map<string, { category: Category; files: ScannedFile[] }>;
 export default function Organizer() {
   const [supported] = useState(isSupported);
   const [root, setRoot] = useState<FileSystemDirectoryHandle | null>(null);
+  const [rootName, setRootName] = useState<string>("");
   const [files, setFiles] = useState<ScannedFile[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -44,6 +49,8 @@ export default function Organizer() {
   const [recursive, setRecursive] = useState(false);
   const [categories, setCategories] = useState<Category[]>(() => loadCategories());
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [failures, setFailures] = useState<MoveError[]>([]);
+  const [oneDriveLikely, setOneDriveLikely] = useState(false);
 
   const plan = useMemo<Plan>(() => {
     const map: Plan = new Map();
@@ -69,10 +76,13 @@ export default function Organizer() {
 
   const handlePick = useCallback(async () => {
     setError(null);
+    setFailures([]);
     try {
       const dir = await pickDirectory();
       if (!dir) return;
       setRoot(dir);
+      setRootName(dir.name);
+      setOneDriveLikely(/onedrive/i.test(dir.name));
       setPhase("scanning");
       const scanned = await scanDirectory(dir, { recursive });
       setFiles(scanned);
@@ -87,41 +97,74 @@ export default function Organizer() {
   const handleApply = useCallback(async () => {
     if (!root) return;
     setError(null);
+    setFailures([]);
+
+    // Win11 can revoke File System Access permission between scan and apply.
+    // Re-confirm write permission up front instead of failing N times.
+    const granted = await ensureWritePermission(root);
+    if (!granted) {
+      setError(
+        "Write permission was denied. Click 'Pick another folder' and grant access when prompted."
+      );
+      return;
+    }
+
     setPhase("applying");
     const groups = Array.from(plan.values()).filter(
       (g) => g.category.key !== OTHER_CATEGORY.key
     );
     const total = groups.reduce((sum, g) => sum + g.files.length, 0);
     setProgress({ done: 0, total });
+
+    const collectedFailures: MoveError[] = [];
     try {
       let done = 0;
       for (const group of groups) {
-        const dest = await ensureSubdirectory(root, group.category.folder);
-        for (const file of group.files) {
-          try {
-            await moveFile(file, dest);
-          } catch (err) {
-            console.warn("Failed to move", file.name, err);
+        let dest: FileSystemDirectoryHandle;
+        try {
+          dest = await ensureSubdirectory(root, group.category.folder);
+        } catch (err) {
+          // Skip whole group if we can't create the destination folder
+          for (const file of group.files) {
+            collectedFailures.push({
+              file,
+              code: "permission-denied",
+              message: `Couldn't create folder "${group.category.folder}": ${
+                err instanceof Error ? err.message : "unknown error"
+              }`,
+            });
+            done += 1;
+            setProgress({ done, total });
           }
+          continue;
+        }
+        for (const file of group.files) {
+          const result = await moveFile(file, dest);
+          if (!result.ok) collectedFailures.push(result.error);
           done += 1;
           setProgress({ done, total });
         }
       }
+      setFailures(collectedFailures);
       setPhase("done");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to apply";
       setError(message);
+      setFailures(collectedFailures);
       setPhase("ready");
     }
   }, [root, plan]);
 
   const handleReset = useCallback(() => {
     setRoot(null);
+    setRootName("");
     setFiles([]);
     setExcluded(new Set());
     setPhase("idle");
     setProgress({ done: 0, total: 0 });
     setError(null);
+    setFailures([]);
+    setOneDriveLikely(false);
   }, []);
 
   const handleResetRules = useCallback(() => {
@@ -162,15 +205,23 @@ export default function Organizer() {
             <img src="/logo.svg" alt="" className="w-6 h-6" />
             <span className="font-medium tracking-tight text-gray-100">DriveOrganizer</span>
           </Link>
-          {root && (
-            <button
-              onClick={handleReset}
-              className="text-xs text-gray-400 hover:text-gray-100 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 inline mr-1.5" />
-              Pick another folder
-            </button>
-          )}
+          <div className="flex items-center gap-3 min-w-0">
+            {rootName && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-gray-500 max-w-xs truncate">
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="truncate">{rootName}</span>
+              </span>
+            )}
+            {root && (
+              <button
+                onClick={handleReset}
+                className="flex-none text-xs text-gray-400 hover:text-gray-100 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 inline mr-1.5" />
+                Pick another
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -180,6 +231,23 @@ export default function Organizer() {
             <AlertTriangle className="w-4 h-4 flex-none mt-0.5" />
             <span>{error}</span>
           </div>
+        )}
+
+        {oneDriveLikely && phase !== "idle" && (
+          <div className="mb-6 flex items-start gap-3 p-4 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sm text-sky-200">
+            <Cloud className="w-4 h-4 flex-none mt-0.5" />
+            <div>
+              <div className="font-medium">This looks like a OneDrive folder.</div>
+              <div className="mt-1 text-sky-300/80">
+                Files set to "online-only" need to download before they can be moved. If a file
+                fails, right-click it in File Explorer and choose "Always keep on this device", then retry.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {failures.length > 0 && (
+          <FailureSummary failures={failures} />
         )}
 
         {phase === "idle" && (
@@ -201,6 +269,7 @@ export default function Organizer() {
             categories={categories}
             excluded={excluded}
             progress={progress}
+            failures={failures.length}
             onApply={handleApply}
             onToggleFile={toggleFile}
             onUpdateFolder={updateFolder}
@@ -222,13 +291,14 @@ function IdleScreen({
   setRecursive: (v: boolean) => void;
 }) {
   return (
-    <div className="text-center py-20">
+    <div className="text-center py-16">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 mb-6">
         <FolderOpen className="w-7 h-7 text-sky-400" />
       </div>
       <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Pick a folder to clean up</h1>
       <p className="mt-3 text-sm text-gray-400 max-w-md mx-auto">
         DriveOrganizer reads the folder you choose. Files never leave your machine.
+        Works on any drive — C:, D:, USB, network share, doesn&rsquo;t matter.
       </p>
       <button
         onClick={onPick}
@@ -246,8 +316,106 @@ function IdleScreen({
         />
         Include nested subfolders (slower on huge folders)
       </label>
+
+      <div className="mt-12 max-w-xl mx-auto text-left">
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-gray-400 space-y-3">
+          <div className="flex items-start gap-2">
+            <Info className="w-3.5 h-3.5 mt-0.5 flex-none text-sky-400" />
+            <div>
+              <span className="text-gray-200 font-medium">Windows tip:</span> pick folders like
+              Documents, Desktop, Downloads, or any folder you created. Windows blocks browser
+              access to system folders (Program Files, Windows, AppData) — that&rsquo;s a Windows
+              security feature, not a bug here.
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <Cloud className="w-3.5 h-3.5 mt-0.5 flex-none text-sky-400" />
+            <div>
+              <span className="text-gray-200 font-medium">OneDrive tip:</span> if files in your
+              picked folder are set to "online-only", Windows downloads them on read.
+              Big folders may take a moment.
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
+}
+
+function FailureSummary({ failures }: { failures: MoveError[] }) {
+  const [open, setOpen] = useState(false);
+  const grouped = useMemo(() => {
+    const map = new Map<MoveError["code"], MoveError[]>();
+    for (const f of failures) {
+      const list = map.get(f.code) ?? [];
+      list.push(f);
+      map.set(f.code, list);
+    }
+    return Array.from(map.entries());
+  }, [failures]);
+
+  return (
+    <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 text-sm overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left text-amber-200 hover:bg-amber-500/5 transition-colors duration-150 cursor-pointer"
+      >
+        <AlertTriangle className="w-4 h-4 flex-none" />
+        <span className="flex-1">
+          {failures.length} file{failures.length === 1 ? "" : "s"} couldn&rsquo;t be moved.
+          Click for details.
+        </span>
+        <ChevronRight
+          className={cn("w-4 h-4 text-amber-300 transition-transform duration-200", open && "rotate-90")}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-amber-500/20 divide-y divide-amber-500/10">
+          {grouped.map(([code, items]) => (
+            <div key={code} className="px-4 py-3">
+              <div className="text-xs font-medium text-amber-200 mb-1.5">
+                {labelForCode(code)} &middot; {items.length}
+              </div>
+              <div className="text-xs text-amber-300/80 mb-2">{items[0].message}</div>
+              <ul className="space-y-0.5 max-h-32 overflow-y-auto">
+                {items.slice(0, 50).map((f, i) => (
+                  <li key={i} className="text-xs text-amber-300/60 font-mono truncate">
+                    {f.file.relativePath}
+                  </li>
+                ))}
+                {items.length > 50 && (
+                  <li className="text-xs text-amber-300/40">
+                    + {items.length - 50} more&hellip;
+                  </li>
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function labelForCode(code: MoveError["code"]): string {
+  switch (code) {
+    case "permission-denied":
+      return "Permission denied";
+    case "file-locked":
+      return "File in use by another app";
+    case "onedrive-offline":
+      return "OneDrive online-only files";
+    case "destination-exists":
+      return "Destination conflict";
+    case "source-missing":
+      return "File no longer exists";
+    case "quota-exceeded":
+      return "Disk space exhausted";
+    case "name-too-long":
+      return "Path too long for Windows";
+    default:
+      return "Other errors";
+  }
 }
 
 function PlanView({
@@ -257,6 +425,7 @@ function PlanView({
   categories,
   excluded,
   progress,
+  failures,
   onApply,
   onToggleFile,
   onUpdateFolder,
@@ -268,6 +437,7 @@ function PlanView({
   categories: Category[];
   excluded: Set<string>;
   progress: { done: number; total: number };
+  failures: number;
   onApply: () => void;
   onToggleFile: (path: string) => void;
   onUpdateFolder: (key: string, folder: string) => void;
@@ -338,7 +508,9 @@ function PlanView({
         <div className="flex items-center gap-3 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-200">
           <Check className="w-4 h-4 flex-none" />
           <span>
-            Moved {progress.done} files into {stats.groups} folders.
+            Moved {Math.max(0, progress.done - failures)} of {progress.done} file
+            {progress.done === 1 ? "" : "s"} into {stats.groups} folder{stats.groups === 1 ? "" : "s"}.
+            {failures > 0 && ` ${failures} skipped — see details above.`}
           </span>
         </div>
       )}

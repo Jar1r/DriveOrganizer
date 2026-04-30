@@ -87,6 +87,13 @@ export const DEFAULT_CATEGORIES: Category[] = [
     color: "#64748b",
     extensions: ["dmg", "exe", "msi", "pkg", "deb", "rpm", "appimage"],
   },
+  {
+    key: "shortcuts",
+    label: "Shortcuts",
+    folder: "Shortcuts",
+    color: "#94a3b8",
+    extensions: ["lnk", "url", "webloc"],
+  },
 ];
 
 export const OTHER_CATEGORY: Category = {

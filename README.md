@@ -67,6 +67,54 @@ Default categories live in `src/lib/rules.ts`. Custom folder names persist to `l
 The organizer page falls back to a friendly "browser not supported" screen on Safari/Firefox.
 The landing page works everywhere.
 
+## Drive support
+
+DriveOrganizer is **drive-agnostic**. It operates on whatever folder you pick via the
+File System Access API — drive letter, mount point, or path don't matter.
+
+| Setup                              | Works |
+| ---------------------------------- | ----- |
+| Single drive (C: only)             | ✅    |
+| Dual drive (C: SSD + D: HDD, e.g. Lenovo Legion Y720) | ✅    |
+| External USB / Thunderbolt drive   | ✅    |
+| Mapped network drive (Z:)          | ✅ (slower) |
+| OneDrive synced folder             | ✅ (see caveats below) |
+
+**Cross-drive limitation:** the organizer only sorts files *within* the folder you pick.
+It can't move a file from `C:\Downloads` to `D:\Sorted` in one operation. If you want
+to consolidate across drives, drag files into a single folder first, then run the
+organizer on that folder.
+
+## Windows 11 notes
+
+Windows 11's protections cause specific failure modes. The app classifies and reports
+each one so you know how to fix it.
+
+**Folders that work:**
+- Documents, Desktop, Downloads, Pictures, Music, Videos
+- Any folder you created (`C:\Users\<you>\Code`, `D:\Projects`, etc.)
+- USB drives, external SSDs, network shares
+
+**Folders that won't work** (Windows blocks browser access):
+- `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)`
+- `AppData` and other hidden system directories
+- The root of `C:\Users\<you>\` (you can pick subfolders, just not the root)
+
+**OneDrive Files-On-Demand:** if your Documents/Desktop are redirected to OneDrive,
+files marked "online-only" must download before they can be moved. The app warns when
+it detects a OneDrive folder. To force a file local: right-click in File Explorer →
+"Always keep on this device".
+
+**Files in use by another app:** Windows file locks (Word, Photoshop, anything with
+the file open) cause moves to fail with a clear error. Close the app and retry —
+already-moved files won't be re-touched.
+
+**Long paths:** Windows still has a 260-char path limit unless long paths are enabled
+in the registry. The app catches name-too-long errors and reports them.
+
+**Permission revocation:** Windows 11 + Edge can drop the File System Access permission
+between scan and apply. The app re-prompts before writing instead of silently failing.
+
 ## Privacy
 
 Everything happens on-device. No analytics, no telemetry, no upload. The service worker is
